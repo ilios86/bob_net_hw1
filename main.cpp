@@ -61,6 +61,7 @@ void packet_handler(u_char *param, const struct pcap_pkthdr *header, const u_cha
 
     fprintf(fd, "============== packet %5lu (id:0x%04x) information ===============\n", pkt_cnt, ntohs(ip_h->ip_id));
     // print mac address
+
     //ip_header_len = (ip_h->ip_hl)*4;
     struct libnet_tcp_hdr *tcp_h = (struct libnet_tcp_hdr*)&pkt_data[LIBNET_ETH_H+LIBNET_IPV4_H];
 
