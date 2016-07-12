@@ -1,5 +1,6 @@
 #include "pcap.h"
-#include "header.h"
+//#include "header.h"
+#include <libnet.h>
 #include <arpa/inet.h>
 
 using namespace std;
@@ -45,35 +46,36 @@ void packet_handler(u_char *param, const struct pcap_pkthdr *header, const u_cha
     FILE *fd = stdout;
 
 
-    int ethernet_header_len, ip_header_len, tcp_header_len;
-    ethernet_header_len = 14;
+//    int ethernet_header_len, ip_header_len, tcp_header_len;
+//    ethernet_header_len = 14;
+    struct libnet_ethernet_hdr* eth_h = (struct libnet_ethernet_hdr*)pkt_data;
 
     pkt_cnt++;
-    unsigned short ip_type = ntohs(*(unsigned short*)&pkt_data[12]);
+    unsigned short ip_type = ntohs(eth_h->ether_type);
     if (ip_type != 0x800) {
         return;
     }
-    ip_header *ip_h = (ip_header*)&pkt_data[14];
-    if (ip_h->proto != 0x6) // TCP protocol
+    struct libnet_ipv4_hdr *ip_h = (struct libnet_ipv4_hdr*)&pkt_data[LIBNET_ETH_H];
+    if (ip_h->ip_p != 0x6) // TCP protocol
         return;
 
-    fprintf(fd, "============== packet %5lu (id:0x%04x) information ===============\n", pkt_cnt, ntohs(ip_h->identification));
+    fprintf(fd, "============== packet %5lu (id:0x%04x) information ===============\n", pkt_cnt, ntohs(ip_h->ip_id));
     // print mac address
-    ip_header_len = (ip_h->ver_ihl & 0x0F)*4;
-    tcp_header *tcp_h = (tcp_header*)&pkt_data[14+ip_header_len];
+    //ip_header_len = (ip_h->ip_hl)*4;
+    struct libnet_tcp_hdr *tcp_h = (struct libnet_tcp_hdr*)&pkt_data[LIBNET_ETH_H+LIBNET_IPV4_H];
 
     fprintf(fd, "MAC :: SRC[%02X:%02X:%02X:%02X:%02X:%02X] --> ",pkt_data[6], pkt_data[7], pkt_data[8], pkt_data[9], pkt_data[10], pkt_data[11]);
     fprintf(fd, "[%02X:%02X:%02X:%02X:%02X:%02X]DEST \n",pkt_data[0], pkt_data[1], pkt_data[2], pkt_data[3], pkt_data[4], pkt_data[5]);
 
-    fprintf(fd, "IP :: SRC[%hu.%hu.%hu.%hu] --> [%hu.%hu.%hu.%hu]DEST\n",
-            ip_h->saddr.byte1, ip_h->saddr.byte2, ip_h->saddr.byte3, ip_h->saddr.byte4,
-            ip_h->daddr.byte1, ip_h->daddr.byte2, ip_h->daddr.byte3, ip_h->daddr.byte4);
-    fprintf(fd, "port :: SRC[%u] --> [%u]DEST\n", ntohs(tcp_h->sport), ntohs(tcp_h->dport));
+    char ip_src[INET_ADDRSTRLEN],ip_dst[INET_ADDRSTRLEN];
+    inet_ntop(AF_INET, &ip_h->ip_src.s_addr, ip_src, INET_ADDRSTRLEN);
+    inet_ntop(AF_INET, &ip_h->ip_dst.s_addr, ip_dst, INET_ADDRSTRLEN);
+    fprintf(fd, "IP :: SRC[%s] --> [%s]DEST\n", ip_src, ip_dst);
+    fprintf(fd, "port :: SRC[%u] --> [%u]DEST\n", ntohs(tcp_h->th_sport), ntohs(tcp_h->th_dport));
 
-    tcp_header_len = tcp_h->th_off / 4;
-    const u_char *payload = (pkt_data + ethernet_header_len + ip_header_len + tcp_header_len);
+    const u_char *payload = (pkt_data + LIBNET_ETH_H + LIBNET_IPV4_H + LIBNET_TCP_H);
 
-    int payload_len = ip_h->tlen - ip_header_len - tcp_header_len;
+    int payload_len = ip_h->ip_len - LIBNET_IPV4_H - LIBNET_TCP_H;
     //fprintf(fd, "DATA(%d)>>\n", payload_len);
     //fprint_hex(fd, payload, payload_len);
 
